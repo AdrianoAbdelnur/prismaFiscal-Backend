@@ -6,47 +6,69 @@ require('dotenv').config();
 const crypto = require('crypto');
 
 const registerUser = async (req, res) => {
-    try {
-        const salt = await bcryptjs.genSalt(10);
-        const encryptedPassword = await bcryptjs.hash(req.body.password, salt)
-        const userToRegister = {
-            ...req.body,
-            password: encryptedPassword,
-        }
-        const newUser = new User(userToRegister);
-        await newUser.save();
-        res.status(200).json({ message: 'User successfully created.' })
-    } catch (error) {
-        res.status(error.code || 500).json({ message: error.message })
+  try {
+    const salt = await bcryptjs.genSalt(10);
+    const encryptedPassword = await bcryptjs.hash(req.body.password, salt);
+
+    const userToRegister = {
+      ...req.body,
+      password: encryptedPassword,
+      
+      ...(req.body.document && { document: Number(req.body.document) }),
+    };
+
+    const newUser = new User(userToRegister);
+    await newUser.save();
+    res.status(200).json({ message: 'User successfully created.' });
+
+  } catch (error) {
+    if (error?.code === 11000) {
+      const field = Object.keys(error.keyValue || {})[0];
+      const value = error.keyValue?.[field];
+      const msg = field === 'email'
+        ? 'Email ya registrado'
+        : field === 'document'
+          ? 'DNI ya registrado'
+          : 'Duplicado no permitido';
+      return res.status(409).json({ message: msg, field, value });
     }
+    res.status(500).json({ message: error.message || 'Error creating user' });
+  }
 };
 
 const loginUser = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        console.log(email, password)
-        const userFound = await User.findOne({ email, isDeleted: false });
-        console.log(userFound)
-        if (!userFound) return res.status(400).json({ message: 'Incorrect user credentials.' });
-        const loginSucceed = await bcryptjs.compare(password, userFound?.password);
-        if (!loginSucceed) return res.status(400).json({ message: 'Incorrect user credentials.' });
-        const payload = {
-            user: {
-                id: userFound._id,
-                role: userFound.role,
-            },
-        };
-        jwt.sign(payload, process.env.SECRET_WORD, (error, token) => {
-            if (error) {
-                throw error;
-            }
-            res.status(200).json({ message: 'User successfully logged in.', token });
-        })
-    } catch (error) {
-        res.status(error.code || 500).json({ message: error.message })
-    }
-};
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty())
+      return res.status(400).json({ errors: errors.array() });
 
+    const { email, document, password } = req.body;
+
+    const query = email ? { email } : { document };
+    const user = await User.findOne(query);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { sub: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
+    res.json({ token, user: {
+      _id: user._id,
+      name: user.name,
+      lastName: user.lastName,
+      email: user.email,
+      document: user.document,
+      role: user.role,
+    }});
+  } catch (err) {
+    res.status(500).json({ message: err.message || 'Login failed' });
+  }
+};
 /* const googleLogin = async (req, res) => {
     try {
         const user = req.user
