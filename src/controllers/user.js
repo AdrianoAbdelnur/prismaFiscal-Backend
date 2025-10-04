@@ -43,6 +43,7 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
 
     const { email, document, password } = req.body;
+    console.log("email, document, password", email, document, password)
 
     const query = email ? { email } : { document };
     const user = await User.findOne(query);
