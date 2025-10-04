@@ -27,25 +27,33 @@ const verifyRegisterFields = () => ([
 ]);
 
 const verifyLoginFields = () => ([
-  oneOf([
-    body('email')
-      .exists().withMessage('email requerido')
-      .bail()
-      .isEmail().withMessage('email inválido')
-      .normalizeEmail()
-      .trim(),
-
-    body('document')
-      .exists().withMessage('document requerido')
-      .bail()
-      .isString().trim()
-      .customSanitizer(v => v.replace(/\D/g, ''))
-      .isLength({ min: 7, max: 10 }).withMessage('DNI inválido')
-      .toInt(),
-  ], 'Proporcione un email válido o un DNI'),
   
-  body('password').isLength({ min: 6, max: 16 }).withMessage('Password inválido'),
+  body('email')
+    .optional({ checkFalsy: true })
+    .isEmail().withMessage('Email inválido')
+    .normalizeEmail()
+    .trim(),
+
+  
+  body('document')
+    .optional({ checkFalsy: true })
+    .customSanitizer(v => String(v ?? '').replace(/\D/g, '')) 
+    .isLength({ min: 7, max: 10 }).withMessage('DNI inválido')
+    .toInt(),
+
+  
+  body('password')
+    .isLength({ min: 6, max: 16 }).withMessage('Password inválido'),
+
+
+  body().custom(({ email, document }) => {
+    if (!email && !document) {
+      throw new Error('Proporcione un email válido o un DNI');
+    }
+    return true;
+  }),
 ]);
+
 
 
 
