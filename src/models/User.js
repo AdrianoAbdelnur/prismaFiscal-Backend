@@ -28,8 +28,8 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['passenger', 'driver', 'admin'],
-      default: 'passenger',
+      enum: ['fiscal', 'superFiscal', 'admin', 'interAdmin'],
+      default: 'fiscal',
     },
     phoneNumber: {
       type: String,
