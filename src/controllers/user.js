@@ -49,19 +49,19 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: 'Proporcione un email o DNI' });
     }
 
-    // normalizo DNI (acepta string o number)
+
     const docNum = document != null ? Number(String(document).replace(/\D/g, '')) : undefined;
 
     const query = email ? { email } : { document: docNum };
     const user = await User.findOne(query);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const ok = await bcrypt.compare(password, user.password);
+    const ok = await bcryptjs.compare(password, user.password);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
     const token = jwt.sign(
       { sub: user._id, role: user.role },
-      process.env.JWT_SECRET,
+      process.env.SECRET_WORD,
       { expiresIn: '12h' }
     );
 
