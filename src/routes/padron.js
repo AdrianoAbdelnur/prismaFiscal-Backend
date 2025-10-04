@@ -9,7 +9,7 @@ const {
   markVote,
   unmarkVote,
   mesaStats,
-} = require("../controllers/padronController");
+} = require("../controllers/padron");
 
 const { decodeToken, adminRequiredValidation } = require("../middlewares/auth");
 
