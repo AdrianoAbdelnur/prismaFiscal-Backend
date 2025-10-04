@@ -6,7 +6,7 @@ const { decodeToken, adminRequiredValidation } = require("../middlewares/auth");
 const router = express.Router();
 
 router.post('/register', verifyRegisterFields(), validate, registerUser);
-router.post('/login', verifyLoginFields(), validate, loginUser);
+router.post('/login', verifyLoginFields(), loginUser);
 /* router.post('/googleLogin', decodeFirebaseToken , googleLogin);
 router.post('/googleRegister', decodeFirebaseToken , googleRegister); */
 

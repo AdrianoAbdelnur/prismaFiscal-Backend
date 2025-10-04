@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const emailer = require('../helpers/emailer');
 require('dotenv').config();
 const crypto = require('crypto');
+const { validationResult } = require('express-validator');
 
 const registerUser = async (req, res) => {
   try {
@@ -38,14 +39,20 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
+    // valida según tus reglas previas (verifyLoginFields)
     const errors = validationResult(req);
-    if (!errors.isEmpty())
-      return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { email, document, password } = req.body;
-    console.log("email, document, password", email, document, password)
 
-    const query = email ? { email } : { document };
+    if (!email && (document === undefined || document === null || String(document).trim() === '')) {
+      return res.status(400).json({ message: 'Proporcione un email o DNI' });
+    }
+
+    // normalizo DNI (acepta string o number)
+    const docNum = document != null ? Number(String(document).replace(/\D/g, '')) : undefined;
+
+    const query = email ? { email } : { document: docNum };
     const user = await User.findOne(query);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -58,16 +65,19 @@ const loginUser = async (req, res) => {
       { expiresIn: '12h' }
     );
 
-    res.json({ token, user: {
-      _id: user._id,
-      name: user.name,
-      lastName: user.lastName,
-      email: user.email,
-      document: user.document,
-      role: user.role,
-    }});
+    return res.json({
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        lastName: user.lastName,
+        email: user.email,
+        document: user.document,
+        role: user.role,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message || 'Login failed' });
+    return res.status(500).json({ message: err.message || 'Login failed' });
   }
 };
 /* const googleLogin = async (req, res) => {
