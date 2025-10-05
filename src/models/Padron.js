@@ -4,7 +4,7 @@ const PadronSchema = new mongoose.Schema(
   {
     mesa:   { type: String, required: true, index: true },
     orden:  { type: Number, required: true },
-    dni:    { type: String,  required: true, index: true },
+    dni:    { type: String,  required: true },
     nombre: { type: String,  required: true, trim: true },
     sexo:   { type: String,  enum: ['M','F','X'], required: true },
 
