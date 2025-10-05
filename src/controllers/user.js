@@ -53,17 +53,30 @@ const loginUser = async (req, res) => {
     const docNum = document != null ? Number(String(document).replace(/\D/g, '')) : undefined;
 
     const query = email ? { email } : { document: docNum };
-    const user = await User.findOne(query);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const userFound = await User.findOne(query);
+    if (!userFound) return res.status(404).json({ message: 'User not found' });
 
-    const ok = await bcryptjs.compare(password, user.password);
+    const ok = await bcryptjs.compare(password, userFound.password);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign(
-      { sub: user._id, role: user.role },
-      process.env.SECRET_WORD,
-      { expiresIn: '12h' }
-    );
+    if (userFound) {
+            const payload = {
+                user: {
+                    id: userFound._id,
+                    role: userFound.role,
+                },
+            };
+            jwt.sign(
+                    payload,
+                    process.env.SECRET_WORD,             
+                    { expiresIn: '12h' },
+                    (error, token) => {
+                        if (error) throw error;
+                        // usar token
+                    return res.status(200).json({ message: 'User successfully logged in.', token });
+                    }
+                );
+            }
 
     return res.status(200).json({ message: 'User successfully logged in.', token });
   } catch (err) {
