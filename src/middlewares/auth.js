@@ -8,6 +8,7 @@ const decodeToken = async (req, res, next) => {
         console.log("token",token)
         if (!token) return res.status(401).json({ message: 'Token not found' })
         const {user} = jwt.verify(token, process.env.SECRET_WORD);
+        console.log("user",user)
         req.userId = user.id;
         req.userRole = user.role;
         next();
