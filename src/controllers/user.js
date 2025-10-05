@@ -39,7 +39,7 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    // valida según tus reglas previas (verifyLoginFields)
+   
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -65,17 +65,7 @@ const loginUser = async (req, res) => {
       { expiresIn: '12h' }
     );
 
-    return res.json({
-      token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        lastName: user.lastName,
-        email: user.email,
-        document: user.document,
-        role: user.role,
-      },
-    });
+    return res.status(200).json({ message: 'User successfully logged in.', token });
   } catch (err) {
     return res.status(500).json({ message: err.message || 'Login failed' });
   }

@@ -5,6 +5,7 @@ require('dotenv').config();
 const decodeToken = async (req, res, next) => {
     try {
         const token = req.header('Authorization');
+        console.log("token",token)
         if (!token) return res.status(401).json({ message: 'Token not found' })
         const {user} = jwt.verify(token, process.env.SECRET_WORD);
         req.userId = user.id;
