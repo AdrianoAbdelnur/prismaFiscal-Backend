@@ -95,7 +95,10 @@ const deletePerson = async (req, res) => {
 const listByMesa = async (req, res) => {
   try {
     const { mesa } = req.params;
+    console.log("MESA",mesa)
     const items = await Padron.find({ mesa, isDeleted: false }).sort({ orden: 1 }).lean();
+    console.log("ITEMS",items)
+
     if (!items.length) return res.status(404).json({ message: 'Mesa sin registros o inexistente.' });
     return res.status(200).json({ message: 'Listado de mesa obtenido con éxito.', mesa, count: items.length, items });
   } catch (error) {
