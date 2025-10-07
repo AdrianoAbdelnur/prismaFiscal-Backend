@@ -97,7 +97,7 @@ const listByMesa = async (req, res) => {
     const { mesa } = req.params;
     console.log("MESA",mesa)
 
-    const items1 = await Padron.find().sort({ orden: 1 });
+    const items1 = await Padron.find({mesa}).sort({ orden: 1 });
     const items = await Padron.find({ mesa, isDeleted: false }).sort({ orden: 1 }).lean();
     console.log("ITEMS1",items1)
     console.log("ITEMS",items)
