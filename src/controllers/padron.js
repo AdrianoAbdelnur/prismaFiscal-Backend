@@ -96,7 +96,10 @@ const listByMesa = async (req, res) => {
   try {
     const { mesa } = req.params;
     console.log("MESA",mesa)
+
+    const items1 = await Padron.find({ mesa, isDeleted: false }).sort({ orden: 1 });
     const items = await Padron.find({ mesa, isDeleted: false }).sort({ orden: 1 }).lean();
+    console.log("ITEMS1",items1)
     console.log("ITEMS",items)
 
     if (!items.length) return res.status(404).json({ message: 'Mesa sin registros o inexistente.' });
