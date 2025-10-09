@@ -29,9 +29,9 @@ router.post("/", adminRequiredValidation, createPerson);
 
 router.patch("/:id", adminRequiredValidation, updatePerson);
 
-router.patch("/:id/vote", markVote);
+router.patch("/vote/:id", markVote);
 
-router.patch("/:id/unvote", adminRequiredValidation, unmarkVote);
+router.patch("/unvote/:id", adminRequiredValidation, unmarkVote);
 
 router.delete("/:id", adminRequiredValidation, deletePerson);
 
