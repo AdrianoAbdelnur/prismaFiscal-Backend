@@ -151,6 +151,7 @@ const parseBool = v => v === true || v === 'true' || v === 1 || v === '1';
 const markVote = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log("ID",id)
     const {
       source = 'manual',
       deviceId,
