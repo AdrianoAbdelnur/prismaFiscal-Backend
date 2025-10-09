@@ -174,7 +174,7 @@ const markVote = async (req, res) => {
 
   
     const doc = await Padron.findOneAndUpdate(
-      { _id: id, isDeleted: false, voted: false },
+      { _id: id, isDeleted: { $ne: true }, voted: { $ne: true } },
       { $set: set },
       { new: true }
     );
