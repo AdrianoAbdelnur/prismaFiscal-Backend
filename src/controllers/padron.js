@@ -191,7 +191,7 @@ const unmarkVote = async (req, res) => {
     const { id } = req.params;
     const { note } = req.body;
 
-    const doc = await Padron.findOne({ _id: id, isDeleted: false });
+    const doc = await Padron.findOne({ _id: id });
     if (!doc) return res.status(404).json({ message: 'Registro no encontrado.' });
     if (!doc.voted) return res.status(409).json({ message: 'La persona no estaba marcada como votó.' });
 
