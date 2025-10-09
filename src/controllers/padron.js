@@ -146,23 +146,39 @@ const listPadron = async (req, res) => {
   }
 };
 
+const parseBool = v => v === true || v === 'true' || v === 1 || v === '1';
+
 const markVote = async (req, res) => {
   try {
     const { id } = req.params;
-    const { source = 'manual', deviceId, note } = req.body;
+    const {
+      source = 'manual',
+      deviceId,
+      note,
+      votedAt,        
+      impugnado,      
+      asistido       
+    } = req.body;
 
-    const doc = await Padron.findOne({ _id: id, isDeleted: false });
-    if (!doc) return res.status(404).json({ message: 'Registro no encontrado.' });
-    if (doc.voted) return res.status(409).json({ message: 'La persona ya figura como que votó.' });
+    const set = {
+      voted: true,
+      votedAt: votedAt ? new Date(votedAt) : new Date(),
+      votedBy: req.userId || null,
+      voteSource: source,
+      voteDeviceId: deviceId ?? null,
+    };
+    if (note !== undefined)      set.note = String(note);
+    if (impugnado !== undefined) set.impugnado = parseBool(impugnado);
+    if (asistido  !== undefined) set.asistido  = parseBool(asistido);
 
-    doc.voted = true;
-    doc.votedAt = new Date();
-    doc.votedBy = req.userId || null;
-    doc.voteSource = source;
-    doc.voteDeviceId = deviceId || null;
-    if (note !== undefined) doc.note = note;
+  
+    const doc = await Padron.findOneAndUpdate(
+      { _id: id, isDeleted: false, voted: false },
+      { $set: set },
+      { new: true }
+    );
 
-    await doc.save();
+    if (!doc) return res.status(409).json({ message: 'Ya estaba votado o no existe.' });
     return res.status(200).json({ message: 'Voto marcado con éxito.', person: doc });
   } catch (error) {
     return res.status(error.code || 500).json({ message: error.message });
