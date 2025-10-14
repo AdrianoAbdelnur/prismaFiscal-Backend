@@ -27,9 +27,10 @@ const ActaSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    photos: {
-      type: [String],
-      default: [],
+    photo: {
+      data: Buffer,
+      contentType: String,   
+      uploadedAt: Date,      
     },
     savedAt: {
       type: Date,
