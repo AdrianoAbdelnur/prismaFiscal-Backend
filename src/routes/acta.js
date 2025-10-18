@@ -1,4 +1,5 @@
 const express = require("express");
+const router = express.Router();
 const { upsertActa, setPhotoBase64, getPhoto, listActas, deleteActa, getTotalsByParty } = require("../controllers/acta");
 
 
