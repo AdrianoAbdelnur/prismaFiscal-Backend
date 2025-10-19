@@ -73,52 +73,42 @@ const setPhotoBase64 = async (req, res) => {
   try {
     const { mesaId } = req.params;
     const { photoBase64 } = req.body;
-    if (!photoBase64) return res.status(400).json({ message: 'photoBase64 es requerido' });
+    if (!photoBase64) return res.status(400).json({ message: "photoBase64 es requerido" });
 
-    const match = photoBase64.match(/^data:(.+);base64,(.*)$/);
-    const contentType = match ? match[1] : 'image/jpeg';
-    const base64Data = match ? match[2] : photoBase64;
-    const buffer = Buffer.from(base64Data, 'base64');
+    let base64Data = photoBase64;
+    let contentType = "image/jpeg";
+    if (photoBase64.startsWith("data:")) {
+      const match = photoBase64.match(/^data:(.+);base64,(.*)$/);
+      if (match) {
+        contentType = match[1];
+        base64Data = match[2];
+      }
+    }
 
-    const lastActa = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+    const buffer = Buffer.from(base64Data, "base64");
 
-    if (!lastActa) {
-      const newActa = new Acta({
+    let acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+
+    if (!acta) {
+      acta = new Acta({
         mesaId,
         votos: {},
         detalle: [],
         total: 0,
         version: 1,
-        status: 'open',
+        status: "open",
         photo: { data: buffer, contentType, uploadedAt: new Date() },
         savedAt: new Date(),
       });
-      await newActa.save();
-      return res.status(201).json({ message: 'Acta creada con foto inicial', acta: newActa });
+    } else {
+      acta.photo = { data: buffer, contentType, uploadedAt: new Date() };
     }
 
-    if (lastActa.status === 'closed') {
-      const newActa = new Acta({
-        mesaId,
-        votos: lastActa.votos,
-        detalle: lastActa.detalle,
-        total: lastActa.total,
-        version: lastActa.version + 1,
-        previousActaId: lastActa._id,
-        status: 'reopened',
-        photo: { data: buffer, contentType, uploadedAt: new Date() },
-      });
-      await newActa.save();
-      return res.status(201).json({ message: 'Nueva versión creada con foto', acta: newActa });
-    }
-
-    lastActa.photo = { data: buffer, contentType, uploadedAt: new Date() };
-    await lastActa.save();
-
-    res.status(200).json({ message: 'Foto guardada correctamente', mesaId });
+    await acta.save();
+    res.status(200).json({ message: "Foto guardada correctamente", mesaId });
   } catch (error) {
-    console.error('❌ Error en setPhotoBase64:', error);
-    res.status(500).json({ message: error.message || 'Error al guardar la foto' });
+    console.error("❌ Error en setPhotoBase64:", error);
+    res.status(500).json({ message: error.message || "Error al guardar la foto" });
   }
 };
 
