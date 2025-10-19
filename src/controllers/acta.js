@@ -8,13 +8,14 @@ const toIntSafe = (v) => {
 const upsertActa = async (req, res) => {
   try {
     const { mesaId, votos, detalle, total } = req.body;
-    if (!mesaId) return res.status(400).json({ message: 'mesaId es requerido' });
+    if (!mesaId) return res.status(400).json({ message: "mesaId es requerido" });
 
     const lastActa = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
 
     let totalCalc = 0;
     if (votos) for (const v of Object.values(votos)) totalCalc += toIntSafe(v);
     else if (detalle) for (const d of detalle) totalCalc += toIntSafe(d.votos);
+
 
     if (!lastActa) {
       const newActa = new Acta({
@@ -23,14 +24,15 @@ const upsertActa = async (req, res) => {
         detalle: detalle || [],
         total: total || totalCalc,
         version: 1,
-        status: 'open',
+        status: "closed", 
         savedAt: new Date(),
       });
       await newActa.save();
-      return res.status(201).json({ message: 'Acta creada correctamente', acta: newActa });
+      return res.status(201).json({ message: "Acta creada y cerrada correctamente", acta: newActa });
     }
 
-    if (lastActa.status === 'closed') {
+  
+    if (lastActa.status === "closed") {
       const newActa = new Acta({
         mesaId,
         votos: votos || {},
@@ -38,16 +40,17 @@ const upsertActa = async (req, res) => {
         total: total || totalCalc,
         version: lastActa.version + 1,
         previousActaId: lastActa._id,
-        status: 'reopened',
+        status: "closed", 
         savedAt: new Date(),
       });
       await newActa.save();
       return res.status(201).json({
-        message: `Nueva versión creada (v${newActa.version}) del acta ${mesaId}`,
+        message: `Nueva versión cerrada (v${newActa.version}) del acta ${mesaId}`,
         acta: newActa,
       });
     }
 
+    
     const acta = await Acta.findOneAndUpdate(
       { mesaId, isDeleted: false },
       {
@@ -56,16 +59,16 @@ const upsertActa = async (req, res) => {
           detalle: detalle || [],
           total: total || totalCalc,
           savedAt: new Date(),
-          status: 'open',
+          status: "closed", 
         },
       },
       { new: true }
     );
 
-    res.status(200).json({ message: 'Acta actualizada correctamente', acta });
+    res.status(200).json({ message: "Acta actualizada y cerrada correctamente", acta });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message || 'Error al guardar el acta' });
+    console.error("❌ Error guardando acta:", error);
+    res.status(500).json({ message: error.message || "Error al guardar el acta" });
   }
 };
 
@@ -123,7 +126,7 @@ const getPhoto = async (req, res) => {
     if (!acta || !acta.photo || !acta.photo.data) {
       return res.status(404).json({ message: "Foto no encontrada" });
     }
-    
+
     res.setHeader("Content-Type", acta.photo.contentType || "image/jpeg");
     res.send(Buffer.from(acta.photo.data));
   } catch (error) {
