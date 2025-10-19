@@ -115,14 +115,20 @@ const setPhotoBase64 = async (req, res) => {
 const getPhoto = async (req, res) => {
   try {
     const { mesaId } = req.params;
-    const acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
-    if (!acta || !acta.photo || !acta.photo.data)
-      return res.status(404).send('Foto no encontrada');
 
-    res.set('Content-Type', acta.photo.contentType || 'image/jpeg');
-    res.send(acta.photo.data);
+    const acta = await Acta.findOne({ mesaId, isDeleted: false })
+      .sort({ version: -1 })
+      .select("photo");
+
+    if (!acta || !acta.photo || !acta.photo.data) {
+      return res.status(404).json({ message: "Foto no encontrada" });
+    }
+    
+    res.setHeader("Content-Type", acta.photo.contentType || "image/jpeg");
+    res.send(Buffer.from(acta.photo.data));
   } catch (error) {
-    res.status(500).send(error.message || 'Error al obtener la foto');
+    console.error("❌ Error en getPhoto:", error);
+    res.status(500).json({ message: error.message || "Error al obtener la foto" });
   }
 };
 
@@ -239,6 +245,8 @@ const getTotalsByParty = async (req, res) => {
     res.status(500).json({ message: error.message || 'Error al calcular totales' });
   }
 };
+
+
 
 module.exports = {
   upsertActa,
