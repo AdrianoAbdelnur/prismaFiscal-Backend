@@ -9,12 +9,12 @@ const ActaSchema = new mongoose.Schema(
     },
     version: {
       type: Number,
-      default: 1, // primera versión por defecto
+      default: 1,
     },
     previousActaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Acta',
-      default: null, // referencia a la versión anterior
+      default: null, 
     },
     status: {
       type: String,

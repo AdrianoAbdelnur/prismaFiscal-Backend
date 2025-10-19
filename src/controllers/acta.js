@@ -249,6 +249,56 @@ const getTotalsByParty = async (req, res) => {
   }
 };
 
+const getActaByMesa = async (req, res) => {
+  try {
+    const { mesaId } = req.params;
+    const { mesas } = req.query;
+
+    if (mesas) {
+      const mesaIds = mesas.split(",").map((m) => m.trim());
+      const actas = await Acta.aggregate([
+        { $match: { mesaId: { $in: mesaIds }, isDeleted: false } },
+        { $sort: { version: -1 } },
+        {
+          $group: {
+            _id: "$mesaId",
+            latest: { $first: "$$ROOT" },
+          },
+        },
+        { $replaceRoot: { newRoot: "$latest" } },
+        {
+          $project: {
+            "photo.data": 0,
+          },
+        },
+      ]);
+
+      return res.status(200).json(actas);
+    }
+
+    // 🧠 Caso 2: una sola mesa en /acta/:mesaId
+    if (mesaId) {
+      const acta = await Acta.findOne({ mesaId, isDeleted: false })
+        .sort({ version: -1, createdAt: -1 })
+        .lean();
+
+      if (!acta)
+        return res.status(404).json({ message: "No se encontró el acta" });
+
+      return res.status(200).json(acta);
+    }
+
+    return res.status(400).json({
+      message: "Debe proporcionar mesaId o parámetro 'mesas'",
+    });
+  } catch (error) {
+    console.error("❌ Error en getActaByMesa:", error);
+    res
+      .status(500)
+      .json({ message: error.message || "Error al obtener el acta(s)" });
+  }
+};
+
 
 
 module.exports = {
@@ -259,4 +309,5 @@ module.exports = {
   closeActa,
   getAllVersions,
   getTotalsByParty,
+  getActaByMesa,
 };
