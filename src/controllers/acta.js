@@ -1,93 +1,133 @@
 const Acta = require('../models/Acta');
-const mongoose = require('mongoose');
 
-// 🔹 Utilidad para sanitizar votos (convierte strings a números)
 const toIntSafe = (v) => {
   const n = Number(String(v ?? '').replace(/[^\d]/g, ''));
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 
-// 🔹 Crea o actualiza un acta (por mesaId)
 const upsertActa = async (req, res) => {
   try {
     const { mesaId, votos, detalle, total } = req.body;
     if (!mesaId) return res.status(400).json({ message: 'mesaId es requerido' });
 
-    // Si no se mandó total, lo calculamos
+    const lastActa = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+
     let totalCalc = 0;
-    if (votos) {
-      for (const v of Object.values(votos)) totalCalc += toIntSafe(v);
-    } else if (detalle) {
-      for (const d of detalle) totalCalc += toIntSafe(d.votos);
+    if (votos) for (const v of Object.values(votos)) totalCalc += toIntSafe(v);
+    else if (detalle) for (const d of detalle) totalCalc += toIntSafe(d.votos);
+
+    if (!lastActa) {
+      const newActa = new Acta({
+        mesaId,
+        votos: votos || {},
+        detalle: detalle || [],
+        total: total || totalCalc,
+        version: 1,
+        status: 'open',
+        savedAt: new Date(),
+      });
+      await newActa.save();
+      return res.status(201).json({ message: 'Acta creada correctamente', acta: newActa });
     }
 
-    const update = {
-      votos: votos || {},
-      detalle: detalle || [],
-      total: total || totalCalc,
-      savedAt: new Date(),
-    };
+    if (lastActa.status === 'closed') {
+      const newActa = new Acta({
+        mesaId,
+        votos: votos || {},
+        detalle: detalle || [],
+        total: total || totalCalc,
+        version: lastActa.version + 1,
+        previousActaId: lastActa._id,
+        status: 'reopened',
+        savedAt: new Date(),
+      });
+      await newActa.save();
+      return res.status(201).json({
+        message: `Nueva versión creada (v${newActa.version}) del acta ${mesaId}`,
+        acta: newActa,
+      });
+    }
 
     const acta = await Acta.findOneAndUpdate(
       { mesaId, isDeleted: false },
-      { $set: update, $setOnInsert: { mesaId } },
-      { new: true, upsert: true }
+      {
+        $set: {
+          votos: votos || {},
+          detalle: detalle || [],
+          total: total || totalCalc,
+          savedAt: new Date(),
+          status: 'open',
+        },
+      },
+      { new: true }
     );
 
-    res.status(200).json({ message: 'Acta guardada correctamente', acta });
+    res.status(200).json({ message: 'Acta actualizada correctamente', acta });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message || 'Error al guardar el acta' });
   }
 };
 
-
 const setPhotoBase64 = async (req, res) => {
   try {
     const { mesaId } = req.params;
     const { photoBase64 } = req.body;
+    if (!photoBase64) return res.status(400).json({ message: 'photoBase64 es requerido' });
 
-    if (!photoBase64) {
-      return res.status(400).json({ message: 'photoBase64 es requerido' });
-    }
-
-    // Puede venir como "data:image/jpeg;base64,AAAA..." o solo "AAAA..."
     const match = photoBase64.match(/^data:(.+);base64,(.*)$/);
     const contentType = match ? match[1] : 'image/jpeg';
     const base64Data = match ? match[2] : photoBase64;
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const acta = await Acta.findOneAndUpdate(
-      { mesaId, isDeleted: false },
-      {
-        $set: {
-          photo: {
-            data: buffer,
-            contentType,
-            uploadedAt: new Date(),
-          },
-        },
-      },
-      { new: true }
-    );
+    const lastActa = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
 
-    if (!acta) return res.status(404).json({ message: 'Acta no encontrada' });
+    if (!lastActa) {
+      const newActa = new Acta({
+        mesaId,
+        votos: {},
+        detalle: [],
+        total: 0,
+        version: 1,
+        status: 'open',
+        photo: { data: buffer, contentType, uploadedAt: new Date() },
+        savedAt: new Date(),
+      });
+      await newActa.save();
+      return res.status(201).json({ message: 'Acta creada con foto inicial', acta: newActa });
+    }
+
+    if (lastActa.status === 'closed') {
+      const newActa = new Acta({
+        mesaId,
+        votos: lastActa.votos,
+        detalle: lastActa.detalle,
+        total: lastActa.total,
+        version: lastActa.version + 1,
+        previousActaId: lastActa._id,
+        status: 'reopened',
+        photo: { data: buffer, contentType, uploadedAt: new Date() },
+      });
+      await newActa.save();
+      return res.status(201).json({ message: 'Nueva versión creada con foto', acta: newActa });
+    }
+
+    lastActa.photo = { data: buffer, contentType, uploadedAt: new Date() };
+    await lastActa.save();
 
     res.status(200).json({ message: 'Foto guardada correctamente', mesaId });
   } catch (error) {
-    console.error(error);
+    console.error('❌ Error en setPhotoBase64:', error);
     res.status(500).json({ message: error.message || 'Error al guardar la foto' });
   }
 };
 
-// 🔹 Obtener la foto para mostrarla
 const getPhoto = async (req, res) => {
   try {
     const { mesaId } = req.params;
-    const acta = await Acta.findOne({ mesaId, isDeleted: false }, { photo: 1 });
-    if (!acta || !acta.photo || !acta.photo.data) {
+    const acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+    if (!acta || !acta.photo || !acta.photo.data)
       return res.status(404).send('Foto no encontrada');
-    }
 
     res.set('Content-Type', acta.photo.contentType || 'image/jpeg');
     res.send(acta.photo.data);
@@ -96,7 +136,6 @@ const getPhoto = async (req, res) => {
   }
 };
 
-// 🔹 Listar actas (paginado opcional)
 const listActas = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -104,47 +143,70 @@ const listActas = async (req, res) => {
     const _limit = Math.min(200, Number(limit));
     const skip = (_page - 1) * _limit;
 
-    const [totalCount, items] = await Promise.all([
-      Acta.countDocuments({ isDeleted: false }),
-      Acta.find({ isDeleted: false })
-        .sort({ mesaId: 1 })
-        .skip(skip)
-        .limit(_limit)
-        .select('-photo.data'), // no mandamos la foto entera al listar
+    const actas = await Acta.aggregate([
+      { $match: { isDeleted: false } },
+      { $sort: { mesaId: 1, version: -1 } },
+      {
+        $group: {
+          _id: "$mesaId",
+          latest: { $first: "$$ROOT" },
+        },
+      },
+      { $replaceRoot: { newRoot: "$latest" } },
+      { $skip: skip },
+      { $limit: _limit },
+      { $project: { "photo.data": 0 } },
     ]);
 
+    const total = await Acta.distinct("mesaId", { isDeleted: false });
+
     res.status(200).json({
-      total: totalCount,
+      total: total.length,
       page: _page,
-      pages: Math.ceil(totalCount / _limit),
-      actas: items,
+      pages: Math.ceil(total.length / _limit),
+      actas,
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Error al listar actas' });
   }
 };
 
-// 🔹 Borrado lógico
-const deleteActa = async (req, res) => {
+const closeActa = async (req, res) => {
   try {
     const { mesaId } = req.params;
-    const acta = await Acta.findOneAndUpdate(
-      { mesaId, isDeleted: false },
-      { $set: { isDeleted: true } },
-      { new: true }
-    );
+    const acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
     if (!acta) return res.status(404).json({ message: 'Acta no encontrada' });
-    res.status(200).json({ message: 'Acta eliminada correctamente' });
+
+    acta.status = 'closed';
+    await acta.save();
+
+    res.status(200).json({ message: 'Acta cerrada correctamente', acta });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Error al eliminar acta' });
+    res.status(500).json({ message: error.message || 'Error al cerrar el acta' });
   }
 };
 
+const getAllVersions = async (req, res) => {
+  try {
+    const { mesaId } = req.params;
+    const versions = await Acta.find({ mesaId, isDeleted: false })
+      .sort({ version: -1 })
+      .select('-photo.data');
+
+    res.status(200).json({
+      mesaId,
+      total: versions.length,
+      versions,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Error al listar versiones' });
+  }
+};
 
 const getTotalsByParty = async (req, res) => {
   try {
     const totals = await Acta.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: { isDeleted: false, status: 'closed' } },
       { $unwind: "$detalle" },
       {
         $group: {
@@ -175,6 +237,7 @@ module.exports = {
   setPhotoBase64,
   getPhoto,
   listActas,
-  deleteActa,
-  getTotalsByParty
+  closeActa,
+  getAllVersions,
+  getTotalsByParty,
 };
