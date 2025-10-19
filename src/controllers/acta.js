@@ -145,7 +145,24 @@ const listActas = async (req, res) => {
       { $replaceRoot: { newRoot: "$latest" } },
       { $skip: skip },
       { $limit: _limit },
-      { $project: { "photo.data": 0 } },
+
+      {
+        $addFields: {
+          hasPhoto: {
+            $cond: [
+              { $ifNull: ["$photo.data", false] },
+              true,
+              false,
+            ],
+          },
+        },
+      },
+
+      {
+        $project: {
+          "photo.data": 0,
+        },
+      },
     ]);
 
     const total = await Acta.distinct("mesaId", { isDeleted: false });
@@ -157,7 +174,8 @@ const listActas = async (req, res) => {
       actas,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Error al listar actas' });
+    console.error("❌ Error en listActas:", error);
+    res.status(500).json({ message: error.message || "Error al listar actas" });
   }
 };
 
