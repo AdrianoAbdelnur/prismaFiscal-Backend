@@ -1,18 +1,27 @@
 const express = require("express");
 const router = express.Router();
-const { upsertActa, setPhotoBase64, getPhoto, listActas, deleteActa, getTotalsByParty } = require("../controllers/acta");
+const {
+  upsertActa,
+  setPhotoBase64,
+  getPhoto,
+  listActas,
+  closeActa,
+  getAllVersions,
+  getTotalsByParty,
+} = require("../controllers/acta");
 
+router.post("/upsertActa", upsertActa);
 
-router.post('/upsertActa', upsertActa);
+router.post("/:mesaId/photo", setPhotoBase64);
 
-router.post('/:mesaId/photo', setPhotoBase64);
+router.get("/:mesaId/photo", getPhoto);
 
-router.get('/:mesaId/photo', getPhoto);
+router.get("/", listActas);
 
-router.get('/', listActas);
+router.patch("/:mesaId/close", closeActa);
 
-router.delete('/:mesaId', deleteActa);
+router.get("/:mesaId/versions", getAllVersions);
 
-router.get('/totales', getTotalsByParty);
+router.get("/totales", getTotalsByParty);
 
-module.exports = router; 
+module.exports = router;
