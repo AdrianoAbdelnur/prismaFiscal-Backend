@@ -10,64 +10,29 @@ const upsertActa = async (req, res) => {
     const { mesaId, votos, detalle, total } = req.body;
     if (!mesaId) return res.status(400).json({ message: "mesaId es requerido" });
 
-    const lastActa = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+    const totalCalc =
+      total ??
+      (votos
+        ? Object.values(votos).reduce((acc, v) => acc + toIntSafe(v), 0)
+        : detalle?.reduce((acc, d) => acc + toIntSafe(d.votos), 0) ?? 0);
 
-    let totalCalc = 0;
-    if (votos) for (const v of Object.values(votos)) totalCalc += toIntSafe(v);
-    else if (detalle) for (const d of detalle) totalCalc += toIntSafe(d.votos);
-
-
-    if (!lastActa) {
-      const newActa = new Acta({
-        mesaId,
-        votos: votos || {},
-        detalle: detalle || [],
-        total: total || totalCalc,
-        version: 1,
-        status: "closed", 
-        savedAt: new Date(),
-      });
-      await newActa.save();
-      return res.status(201).json({ message: "Acta creada y cerrada correctamente", acta: newActa });
-    }
-
-  
-    if (lastActa.status === "closed") {
-      const newActa = new Acta({
-        mesaId,
-        votos: votos || {},
-        detalle: detalle || [],
-        total: total || totalCalc,
-        version: lastActa.version + 1,
-        previousActaId: lastActa._id,
-        status: "closed", 
-        savedAt: new Date(),
-      });
-      await newActa.save();
-      return res.status(201).json({
-        message: `Nueva versión cerrada (v${newActa.version}) del acta ${mesaId}`,
-        acta: newActa,
-      });
-    }
-
-    
     const acta = await Acta.findOneAndUpdate(
       { mesaId, isDeleted: false },
       {
         $set: {
           votos: votos || {},
           detalle: detalle || [],
-          total: total || totalCalc,
+          total: totalCalc,
           savedAt: new Date(),
-          status: "closed", 
+          status: "closed",
         },
       },
-      { new: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    res.status(200).json({ message: "Acta actualizada y cerrada correctamente", acta });
+    res.status(200).json({ message: "Acta guardada correctamente", acta });
   } catch (error) {
-    console.error("❌ Error guardando acta:", error);
+    console.error("Error guardando acta:", error);
     res.status(500).json({ message: error.message || "Error al guardar el acta" });
   }
 };
@@ -89,8 +54,7 @@ const setPhotoBase64 = async (req, res) => {
     }
 
     const buffer = Buffer.from(base64Data, "base64");
-
-    let acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
+    let acta = await Acta.findOne({ mesaId, isDeleted: false });
 
     if (!acta) {
       acta = new Acta({
@@ -98,7 +62,6 @@ const setPhotoBase64 = async (req, res) => {
         votos: {},
         detalle: [],
         total: 0,
-        version: 1,
         status: "open",
         photo: { data: buffer, contentType, uploadedAt: new Date() },
         savedAt: new Date(),
@@ -110,7 +73,7 @@ const setPhotoBase64 = async (req, res) => {
     await acta.save();
     res.status(200).json({ message: "Foto guardada correctamente", mesaId });
   } catch (error) {
-    console.error("❌ Error en setPhotoBase64:", error);
+    console.error("Error en setPhotoBase64:", error);
     res.status(500).json({ message: error.message || "Error al guardar la foto" });
   }
 };
@@ -118,9 +81,8 @@ const setPhotoBase64 = async (req, res) => {
 const getPhoto = async (req, res) => {
   try {
     const { mesaId } = req.params;
-
     const acta = await Acta.findOne({ mesaId, isDeleted: false })
-      .sort({ version: -1 })
+      .sort({ createdAt: -1 })
       .select("photo");
 
     if (!acta || !acta.photo || !acta.photo.data) {
@@ -130,7 +92,7 @@ const getPhoto = async (req, res) => {
     res.setHeader("Content-Type", acta.photo.contentType || "image/jpeg");
     res.send(Buffer.from(acta.photo.data));
   } catch (error) {
-    console.error("❌ Error en getPhoto:", error);
+    console.error("Error en getPhoto:", error);
     res.status(500).json({ message: error.message || "Error al obtener la foto" });
   }
 };
@@ -144,38 +106,22 @@ const listActas = async (req, res) => {
 
     const actas = await Acta.aggregate([
       { $match: { isDeleted: false } },
-      { $sort: { mesaId: 1, version: -1 } },
+      { $sort: { mesaId: 1, createdAt: -1 } },
       {
-        $group: {
-          _id: "$mesaId",
-          latest: { $first: "$$ROOT" },
-        },
+        $group: { _id: "$mesaId", latest: { $first: "$$ROOT" } },
       },
       { $replaceRoot: { newRoot: "$latest" } },
       { $skip: skip },
       { $limit: _limit },
-
       {
         $addFields: {
-          hasPhoto: {
-            $cond: [
-              { $ifNull: ["$photo.data", false] },
-              true,
-              false,
-            ],
-          },
+          hasPhoto: { $cond: [{ $ifNull: ["$photo.data", false] }, true, false] },
         },
       },
-
-      {
-        $project: {
-          "photo.data": 0,
-        },
-      },
+      { $project: { "photo.data": 0 } },
     ]);
 
     const total = await Acta.distinct("mesaId", { isDeleted: false });
-
     res.status(200).json({
       total: total.length,
       page: _page,
@@ -183,40 +129,43 @@ const listActas = async (req, res) => {
       actas,
     });
   } catch (error) {
-    console.error("❌ Error en listActas:", error);
+    console.error("Error en listActas:", error);
     res.status(500).json({ message: error.message || "Error al listar actas" });
   }
 };
 
-const closeActa = async (req, res) => {
+const getActaByMesa = async (req, res) => {
   try {
     const { mesaId } = req.params;
-    const acta = await Acta.findOne({ mesaId, isDeleted: false }).sort({ version: -1 });
-    if (!acta) return res.status(404).json({ message: 'Acta no encontrada' });
+    const { mesas } = req.query;
 
-    acta.status = 'closed';
-    await acta.save();
+    if (mesas) {
+      const mesaIds = mesas.split(",").map((m) => m.trim());
+      const actas = await Acta.aggregate([
+        { $match: { mesaId: { $in: mesaIds }, isDeleted: false } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: { _id: "$mesaId", latest: { $first: "$$ROOT" } },
+        },
+        { $replaceRoot: { newRoot: "$latest" } },
+        { $project: { "photo.data": 0 } },
+      ]);
+      return res.status(200).json(actas);
+    }
 
-    res.status(200).json({ message: 'Acta cerrada correctamente', acta });
+    if (mesaId) {
+      const acta = await Acta.findOne({ mesaId, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (!acta) return res.status(404).json({ message: "No se encontró el acta" });
+      return res.status(200).json(acta);
+    }
+
+    return res.status(400).json({ message: "Debe proporcionar mesaId o parámetro 'mesas'" });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Error al cerrar el acta' });
-  }
-};
-
-const getAllVersions = async (req, res) => {
-  try {
-    const { mesaId } = req.params;
-    const versions = await Acta.find({ mesaId, isDeleted: false })
-      .sort({ version: -1 })
-      .select('-photo.data');
-
-    res.status(200).json({
-      mesaId,
-      total: versions.length,
-      versions,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message || 'Error al listar versiones' });
+    console.error("Error en getActaByMesa:", error);
+    res.status(500).json({ message: error.message || "Error al obtener el acta(s)" });
   }
 };
 
@@ -249,65 +198,11 @@ const getTotalsByParty = async (req, res) => {
   }
 };
 
-const getActaByMesa = async (req, res) => {
-  try {
-    const { mesaId } = req.params;
-    const { mesas } = req.query;
-
-    if (mesas) {
-      const mesaIds = mesas.split(",").map((m) => m.trim());
-      const actas = await Acta.aggregate([
-        { $match: { mesaId: { $in: mesaIds }, isDeleted: false } },
-        { $sort: { version: -1 } },
-        {
-          $group: {
-            _id: "$mesaId",
-            latest: { $first: "$$ROOT" },
-          },
-        },
-        { $replaceRoot: { newRoot: "$latest" } },
-        {
-          $project: {
-            "photo.data": 0,
-          },
-        },
-      ]);
-
-      return res.status(200).json(actas);
-    }
-
-    // 🧠 Caso 2: una sola mesa en /acta/:mesaId
-    if (mesaId) {
-      const acta = await Acta.findOne({ mesaId, isDeleted: false })
-        .sort({ version: -1, createdAt: -1 })
-        .lean();
-
-      if (!acta)
-        return res.status(404).json({ message: "No se encontró el acta" });
-
-      return res.status(200).json(acta);
-    }
-
-    return res.status(400).json({
-      message: "Debe proporcionar mesaId o parámetro 'mesas'",
-    });
-  } catch (error) {
-    console.error("❌ Error en getActaByMesa:", error);
-    res
-      .status(500)
-      .json({ message: error.message || "Error al obtener el acta(s)" });
-  }
-};
-
-
-
 module.exports = {
   upsertActa,
   setPhotoBase64,
   getPhoto,
   listActas,
-  closeActa,
-  getAllVersions,
-  getTotalsByParty,
   getActaByMesa,
+  getTotalsByParty,
 };
